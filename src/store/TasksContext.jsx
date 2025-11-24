@@ -1,28 +1,199 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  onSnapshot, 
+  query, 
+  orderBy,
+  writeBatch 
+} from "firebase/firestore";
+import { db } from "../config/firebase";
 
 function simpleId() {
   return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 }
 
 const TasksContext = createContext(null);
+const TASKS_COLLECTION = "tasks";
+const TASKS_DOC_ID = "roadmap-tasks-v1";
 
 export function TasksProvider({ children }) {
-  const [tasks, setTasks] = useState(() => {
-    try {
-      const raw = localStorage.getItem("roadmap-tasks:v1");
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return [];
-  });
+  const [tasks, setTasks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [useFirebase, setUseFirebase] = useState(false);
 
+  // Check if Firebase is configured
   useEffect(() => {
+    try {
+      // Check if Firebase config has been set up
+      const firebaseConfig = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      console.log("Checking Firebase config...", {
+        projectId: firebaseConfig,
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? "Set" : "Not set",
+        allEnvVars: {
+          apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+          appId: import.meta.env.VITE_FIREBASE_APP_ID
+        }
+      });
+      
+      if (firebaseConfig && firebaseConfig !== "YOUR_PROJECT_ID" && firebaseConfig !== "YOUR_PROJECT_ID.firebaseapp.com") {
+        console.log("✅ Firebase config detected, enabling Firebase...");
+        setUseFirebase(true);
+      } else {
+        console.warn("⚠️ Firebase not configured. Using localStorage.");
+        console.warn("If you updated .env, make sure to restart the dev server!");
+        // Fallback to localStorage
+        const raw = localStorage.getItem("roadmap-tasks:v1");
+        if (raw) {
+          setTasks(JSON.parse(raw));
+        }
+        setIsLoading(false);
+      }
+    } catch (e) {
+      console.error("Firebase check error:", e);
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load tasks from Firestore on mount and set up real-time listener
+  useEffect(() => {
+    if (!useFirebase) return;
+    
+    // Check if db is available
+    if (!db) {
+      console.error("Firestore db is not initialized");
+      setIsLoading(false);
+      setUseFirebase(false);
+      // Fallback to localStorage
+      try {
+        const raw = localStorage.getItem("roadmap-tasks:v1");
+        if (raw) {
+          setTasks(JSON.parse(raw));
+        }
+      } catch (e) {}
+      return;
+    }
+
+    setIsLoading(true);
+    const tasksRef = doc(db, TASKS_COLLECTION, TASKS_DOC_ID);
+
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.error("Firestore connection timeout");
+      console.error("This usually means:");
+      console.error("1. Firestore Database is not enabled in Firebase Console");
+      console.error("2. Firestore security rules are blocking access");
+      console.error("3. Check ENABLE_FIRESTORE.md for step-by-step instructions");
+      setIsLoading(false);
+      setUseFirebase(false);
+      // Fallback to localStorage
+      try {
+        const raw = localStorage.getItem("roadmap-tasks:v1");
+        if (raw) {
+          setTasks(JSON.parse(raw));
+        }
+    } catch (e) {}
+    }, 10000); // 10 second timeout
+
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(
+      tasksRef,
+      (snapshot) => {
+        clearTimeout(timeoutId);
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setTasks(data.tasks || []);
+          // Also save to localStorage as backup
+          try {
+            localStorage.setItem("roadmap-tasks:v1", JSON.stringify(data.tasks || []));
+          } catch (e) {
+            console.error("LocalStorage backup error:", e);
+          }
+        } else {
+          // Document doesn't exist, initialize it
+          setDoc(tasksRef, { tasks: [] }).catch(err => {
+            console.error("Error initializing Firestore document:", err);
+          });
+          setTasks([]);
+        }
+        setIsLoading(false);
+      },
+      (error) => {
+        clearTimeout(timeoutId);
+        console.error("Firestore listener error:", error);
+        console.error("Error code:", error.code);
+        console.error("Error message:", error.message);
+        
+        // Handle offline/unavailable errors specifically
+        if (error.code === 'unavailable' || error.message.includes('offline')) {
+          console.warn("Firestore is unavailable. This could be due to:");
+          console.warn("1. Firestore not enabled in Firebase Console");
+          console.warn("2. Network connectivity issues");
+          console.warn("3. Firestore security rules blocking access");
+          console.warn("Falling back to localStorage...");
+        }
+        
+        // Fallback to localStorage on error
+        try {
+          const raw = localStorage.getItem("roadmap-tasks:v1");
+          if (raw) {
+            setTasks(JSON.parse(raw));
+          }
+    } catch (e) {}
+        setIsLoading(false);
+        setUseFirebase(false);
+      }
+    );
+
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
+  }, [useFirebase]);
+
+  // Save tasks to Firestore whenever they change
+  useEffect(() => {
+    if (!useFirebase || isLoading) return;
+
+    const tasksRef = doc(db, TASKS_COLLECTION, TASKS_DOC_ID);
+    
+    // Debounce saves to avoid too many writes
+    const timeoutId = setTimeout(() => {
+      setDoc(tasksRef, { tasks }, { merge: true }).catch((error) => {
+        console.error("Error saving to Firestore:", error);
+        // Fallback to localStorage
+        try {
+          localStorage.setItem("roadmap-tasks:v1", JSON.stringify(tasks));
+        } catch (e) {
+          console.error("LocalStorage save error:", e);
+        }
+      });
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [tasks, useFirebase, isLoading]);
+
+  // Fallback: Save to localStorage if Firebase is not configured
+  useEffect(() => {
+    if (useFirebase) return;
+    
     try {
       localStorage.setItem("roadmap-tasks:v1", JSON.stringify(tasks));
-    } catch (e) {}
-  }, [tasks]);
+    } catch (e) {
+      console.error("LocalStorage save error:", e);
+    }
+  }, [tasks, useFirebase]);
 
-  // Listen for storage events to sync across tabs/components
+  // Listen for storage events to sync across tabs/components (localStorage fallback)
   useEffect(() => {
+    if (useFirebase) return; // Firestore handles real-time sync
+
     const handleStorageChange = () => {
       try {
         const raw = localStorage.getItem("roadmap-tasks:v1");
@@ -49,7 +220,7 @@ export function TasksProvider({ children }) {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('roadmap-tasks-updated', handleCustomUpdate);
     };
-  }, [tasks]);
+  }, [tasks, useFirebase]);
 
   // Parse CSV text into tasks
   const importCSV = (csvText) => {
@@ -728,7 +899,17 @@ export function TasksProvider({ children }) {
   };
 
   return (
-    <TasksContext.Provider value={{ tasks, addTask, updateTask, deleteTask, importCSV, exportCSV, removeDuplicates }}>
+    <TasksContext.Provider value={{ 
+      tasks, 
+      addTask, 
+      updateTask, 
+      deleteTask, 
+      importCSV, 
+      exportCSV, 
+      removeDuplicates,
+      isLoading,
+      useFirebase 
+    }}>
       {children}
     </TasksContext.Provider>
   );

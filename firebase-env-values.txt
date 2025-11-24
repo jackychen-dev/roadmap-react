@@ -1,0 +1,9 @@
+﻿# Firebase Configuration
+# Copy and paste these values into your .env file
+
+VITE_FIREBASE_API_KEY=AIzaSyCCDk-vTY1wN5UfpUavM8B_-eXvp7HdNpI
+VITE_FIREBASE_AUTH_DOMAIN=roadmap-19885.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=roadmap-19885
+VITE_FIREBASE_STORAGE_BUCKET=roadmap-19885.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=513870187138
+VITE_FIREBASE_APP_ID=1:513870187138:web:695220e27c7c35c3cf829b
