@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useTasks } from "../store/TasksContext";
+import WorkstreamLabel from "../components/WorkstreamLabel";
 
 function TaskRow({ task, onChange, onDelete, workstreams }) {
   return (
@@ -80,7 +81,9 @@ export default function TasksTable() {
 
       {Object.keys(grouped).map((ws) => (
         <div key={ws} style={{ marginBottom: 18 }}>
-          <div style={{ background: "rgba(0,0,0,0.6)", color: "white", padding: "6px 10px", borderRadius: 6, marginBottom: 8 }}>{ws}</div>
+          <div style={{ marginBottom: 8 }}>
+            <WorkstreamLabel workstream={ws} size="medium" />
+          </div>
 
           <table className="tasks-table">
             <thead>

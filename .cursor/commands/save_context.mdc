@@ -1,0 +1,114 @@
+---
+description: "Command to save the current conversation context as a structured markdown file in the agent/ directory for future reference."
+---
+
+# Save Context
+
+This command saves the current conversation with the user into a structured markdown file in `.cursor/context/agent/` that can be parsed by future agents who may not have access to this conversation history.
+
+## What it does
+
+When this command is invoked, you should:
+
+1. **Parse the current conversation** - Review all messages in the current conversation thread
+2. **Extract key information**:
+   - User's goals and objectives
+   - Decisions made and rationale
+   - Code files created or modified
+   - Patterns and conventions established
+   - User preferences and working style
+   - Project structure and organization
+   - Commands or tools created
+   - Any important context about the user or project
+3. **Create a structured summary** in markdown format
+4. **Save to file** at `.cursor/context/agent/YYYY/MM/context_YYYY-MM-DD_HH-MM-SS.md` with the current date and time (organized by year/month)
+
+## Output Format
+
+The context file should be structured as follows:
+
+```markdown
+# Conversation Context
+
+**Date:** YYYY-MM-DD
+**Time:** HH:MM:SS (Timezone)
+**Conversation ID:** [if available]
+
+## Summary
+
+Brief overview of the conversation and its purpose.
+
+## User Context
+
+- **Goals:** What the user is trying to achieve
+- **Working Style:** Any preferences or patterns observed
+- **Project Type:** Type of project being worked on
+- **Technical Preferences:** Tools, languages, frameworks mentioned
+
+## Key Decisions
+
+List of important decisions made during the conversation:
+- Decision 1: Description and rationale
+- Decision 2: Description and rationale
+
+## Files Created/Modified
+
+- `path/to/file1` - Description of changes
+- `path/to/file2` - Description of changes
+
+## Commands/Tools Created
+
+- `command_name` - Description and purpose
+
+## Patterns and Conventions Established
+
+- Convention 1: Description
+- Convention 2: Description
+
+## Important Notes
+
+Any other relevant information that would help a future agent understand:
+- Project structure
+- Dependencies
+- Configuration
+- Special considerations
+
+## Conversation Flow
+
+Brief chronological summary of the conversation:
+1. First topic discussed
+2. Second topic discussed
+3. etc.
+
+## Next Steps / Recommendations
+
+If applicable, what should be done next or recommendations for future work.
+```
+
+## Execution
+
+When invoked, you can either:
+
+**Option 1: Use the helper script to create the file structure:**
+```bash
+python3 .cursor/context/agent/tools/save_context.py
+```
+This will create the `.cursor/context/agent/` directory and a template file with timestamp. Then fill in the content based on the conversation.
+
+**Option 2: Create everything directly:**
+1. Create the `.cursor/context/agent/` directory if it doesn't exist
+2. Get the current date and time
+3. Format as: `YYYY-MM-DD_HH-MM-SS` (e.g., `2025-01-15_14-30-45`)
+4. Create the file: `.cursor/context/agent/YYYY/MM/context_YYYY-MM-DD_HH-MM-SS.md` (create year/month directories if needed)
+5. Write the structured summary following the format above
+6. Confirm the file was created
+
+## Important Considerations
+
+- **Be comprehensive** - Include all relevant context that would help a future agent
+- **Be structured** - Use clear sections and formatting for easy parsing
+- **Be concise** - Summarize effectively without losing important details
+- **Include metadata** - Date, time, and any identifiers
+- **Think about future readers** - Write as if the reader has no prior context
+- **Preserve decisions** - Document why choices were made, not just what was done
+- **Save to agent/ directory** - All conversation contexts go in `.cursor/context/agent/`

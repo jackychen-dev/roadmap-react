@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useTasks } from "../store/TasksContext";
+import WorkstreamLabel from "../components/WorkstreamLabel";
 
 function daysBetween(a, b) {
   const ms = 24 * 60 * 60 * 1000;
@@ -125,11 +126,11 @@ export default function Timeline() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {Object.entries(workstreamColors).map(([k, c]) => (
             <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 14, height: 14, background: c, borderRadius: 4 }} />
-              <div className="muted" style={{ fontSize: 13 }}>{k}</div>
+              <div style={{ width: 14, height: 14, background: c, borderRadius: 4, boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }} />
+              <WorkstreamLabel workstream={k} size="small" />
             </div>
           ))}
         </div>

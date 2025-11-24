@@ -1,0 +1,79 @@
+---
+description: "Load conversation context from a previous save_context session. If no file specified, loads the latest context from agent/ directory."
+---
+
+# Load Context
+
+This command loads conversation context that was previously saved using `save_context`. This allows a new agent session to understand the context, decisions, and progress from a previous conversation.
+
+## What it does
+
+When this command is invoked, you should:
+
+1. **Determine which context file to load**:
+   - If a specific file path is provided, load that file
+   - If no file is specified, find and load the latest context file (by timestamp)
+   - Context files are located in `.cursor/context/agent/YYYY/MM/` directories (organized by year/month)
+   - Files follow the pattern: `context_YYYY-MM-DD_HH-MM-SS.md`
+
+2. **Read and understand the context**:
+   - Read the entire context file
+   - Understand the user's goals, working style, and preferences
+   - Review key decisions and their rationale
+   - Note files that were created or modified
+   - Understand patterns and conventions established
+   - Review the conversation flow and next steps
+
+3. **Apply the context**:
+   - Use this information to understand the current state of the project
+   - Respect established patterns and conventions
+   - Continue from where the previous conversation left off
+   - Be aware of the user's preferences and working style
+
+## Execution
+
+**Option 1: Use the helper script to find the latest context:**
+```bash
+python3 .cursor/context/agent/tools/load_context.py
+```
+This will print the path to the latest context file, which you can then read.
+
+**Option 2: Find and read directly:**
+1. Search recursively in `.cursor/context/agent/` directory (including year/month subdirectories)
+2. Filter for files matching `context_*.md` pattern
+3. Sort by filename (which includes timestamp) to find the latest
+4. Read the latest file (or specified file if provided)
+5. Parse and understand the content
+6. Acknowledge that you've loaded the context and summarize key points
+
+**Option 3: If a specific file is provided:**
+- Read the specified context file directly
+- Parse and understand the content
+- Acknowledge the context has been loaded
+
+## Usage Examples
+
+- `@load_context.mdc` - Load the latest context dump
+- `@load_context.mdc context_2025-11-07_08-38-27.md` - Load a specific context file
+- `@load_context.mdc .cursor/context/context_2025-11-07_08-38-27.md` - Load with full path
+
+## Important Considerations
+
+- **Read thoroughly** - Don't skip sections, understand the full context
+- **Respect decisions** - Honor architectural and design decisions made previously
+- **Continue patterns** - Follow established conventions and patterns
+- **Understand user preferences** - Adapt to the user's working style
+- **Check for next steps** - Review recommendations and continue from there
+- **Be aware of file changes** - Understand what files were modified and why
+- **Context is cumulative** - If multiple context files exist, the latest represents the most current state
+
+## Output
+
+After loading context, you should:
+1. Confirm which context file was loaded
+2. Summarize key points from the context:
+   - User's goals and current objectives
+   - Important decisions and patterns
+   - Current state of the project
+   - Next steps or recommendations
+3. Indicate that you're ready to continue from this context

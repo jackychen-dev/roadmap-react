@@ -1,0 +1,475 @@
+---
+description: "Command to create PyQt6 Windows GUI applications with standardized structure, validation, and UAT task lists."
+---
+
+# Make PyQt App
+
+This command helps you create Windows-only PyQt6 GUI applications following consistent structure, UX patterns, and validation standards. It automates quality checks, file generation, and user acceptance testing.
+
+## What it does
+
+When this command is invoked, you should:
+
+1. **Create standardized project structure** - Generate the required folder tree and files
+2. **Set up environment** - Create setup.bat and run.bat scripts for Windows
+3. **Generate UAT task list** - Create uat_task_list.xlsx with validation checklist
+4. **Verify compliance** - Check structure and requirements before completion
+5. **Document standards** - Ensure specifications.md and README.md are created
+
+## Purpose
+
+Maintain consistent structure, UX, and validation for all small Windows-only PyQt GUI apps.  
+Automate quality checks, file generation, and user acceptance testing.
+
+---
+
+## PROJECT STRUCTURE REQUIREMENTS
+
+All projects must contain:
+```
+app/
+  ui/
+    main_window.py
+  core/
+  utils/
+  assets/
+  requirements.txt
+  setup.bat
+  run.bat
+  README.md
+  specifications.md
+  uat_task_list.xlsx
+```
+
+---
+
+## ENVIRONMENT RULES
+
+- OS: Windows only  
+- Python: >=3.8  
+- Framework: PyQt6 only  
+- Virtual environment: `.venv` created via `setup.bat`  
+- GUI must not freeze during long tasks (use QThread or QThreadPool)  
+- Minimal dependencies, pinned in `requirements.txt`  
+
+---
+
+## COORDINATION PROTOCOL
+
+**Developer expectations**
+- Follow PEP8 and modularize logic cleanly (`core` handles backend, `ui` handles interface).  
+- Follow all mandatory UI patterns: browse buttons on right, scrolling lists, separate setup window, log panel, dark mode.  
+- Keep UI consistent: proper spacing, use dark mode color constants, no hard-coded colors.  
+- Update `specifications.md` for every major UI or logic change.  
+- Each deliverable should be zip-ready (include `.venv` exclusion in `.gitignore` if under version control).  
+
+**Assistant responsibilities**
+- Verify structure and compliance before output.  
+- Enforce all UI patterns from the templates (browse buttons, scrolling lists, setup windows, log panels, dark mode).  
+- Generate or update `uat_task_list.xlsx` in the project root.  
+- Log deviations or missing components in a summary message.  
+- Ensure dark mode is applied application-wide before any windows are created.  
+
+---
+
+## VALIDATION TASKS (AUTOMATED CHECKLIST)
+
+Create `uat_task_list.xlsx` in root directory with these headers:
+| ID | Category | Task | Acceptance Criteria | Status |
+|----|-----------|------|---------------------|--------|
+
+Pre-filled tasks:
+
+1. **Structure** — Confirm folder tree matches specification.  
+2. **Environment** — Run `setup.bat` successfully creates `.venv` and installs deps.  
+3. **Execution** — App runs via `run.bat` without errors.  
+4. **UI Layout** — Window launches cleanly, elements visible and sized correctly.  
+5. **Dark Mode** — Application uses dark mode palette and stylesheets throughout.  
+6. **Browse Buttons** — All browse buttons positioned to the right of text fields.  
+7. **Scrolling Lists** — All list items contained in QScrollArea with proper container widget.  
+8. **Setup Window** — Separate modal dialog window for setup/configuration exists.  
+9. **Log Panel** — Log toggle checkbox and collapsible log panel implemented.  
+10. **Threads** — Long task execution does not block GUI.  
+11. **Logging** — Console/log output visible in GUI or terminal.  
+12. **Files** — All required markdown and text files exist.  
+13. **Docs** — README setup instructions valid.  
+14. **Headless Mode** — If `--headless` used, no UI launch occurs, no crash.  
+15. **PEP8 Check** — Codebase passes `flake8` or equivalent lint.  
+
+Cursor must regenerate this file if missing or outdated.
+
+---
+
+## VALIDATION COMMANDS
+
+Use these Python snippets in a temporary validation session:
+
+```python
+import os, openpyxl, subprocess
+from pathlib import Path
+
+root = Path(".")
+expected = ["app/ui", "app/core", "app/utils", "app/assets"]
+missing = [p for p in expected if not (root / p).exists()]
+
+print("Missing:", missing)
+
+# Confirm setup.bat
+if not (root / "setup.bat").exists():
+    print("setup.bat missing")
+
+# Generate UAT list if missing
+if not (root / "uat_task_list.xlsx").exists():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["ID", "Category", "Task", "Acceptance Criteria", "Status"])
+    tasks = [
+        (1, "Structure", "Confirm folder tree matches spec", "Tree matches template", "Pending"),
+        (2, "Environment", "Run setup.bat to create venv", "Venv successfully created", "Pending"),
+        (3, "Execution", "Run app with run.bat", "App launches without error", "Pending"),
+    ]
+    for t in tasks:
+        ws.append(t)
+    wb.save("uat_task_list.xlsx")
+    print("uat_task_list.xlsx generated")
+```
+
+---
+
+## VERSIONING RULES
+
+- Tag deliverables `v1`, `v1.1`, etc.  
+- Include `specifications.md` changelog section.  
+- No packaging or build scripts required.
+
+---
+
+## Execution
+
+When invoked, you should:
+
+1. **Verify project location** - Ensure you're in the correct directory for the new PyQt app
+2. **Create project structure** - Generate all required folders and files according to the structure requirements
+3. **Generate setup scripts** - Create `setup.bat` and `run.bat` with proper Python virtual environment setup
+4. **Create UAT task list** - Generate `uat_task_list.xlsx` with all validation tasks pre-filled
+5. **Create documentation** - Generate `README.md` and `specifications.md` templates
+6. **Verify compliance** - Check that all requirements are met before completion
+
+## Usage Examples
+
+- `@project/make_pyqt_app.mdc` - Create a new PyQt6 Windows GUI application
+- `@make_pyqt_app.mdc` - Same (if name is unique)
+
+## UI PATTERNS AND CODE STRUCTURES
+
+All PyQt6 applications must follow these standardized UI patterns based on proven implementations:
+
+### 1. Browse Button Pattern (MANDATORY)
+
+**Rule:** Browse buttons MUST always be positioned to the RIGHT of text input fields.
+
+**Template:**
+```python
+from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton
+
+# Create horizontal layout for text field + browse button
+dir_row = QHBoxLayout()
+self.layout().addLayout(dir_row)
+
+# Text input field (expands to fill available space)
+self.dir_edit = QLineEdit()
+self.dir_edit.setPlaceholderText("Select directory...")
+dir_row.addWidget(self.dir_edit)  # Add first - will expand
+
+# Browse button (fixed width, always on the right)
+self.btn_browse = QPushButton("Browse")
+dir_row.addWidget(self.btn_browse)  # Add second - stays on right
+
+# Connect browse button
+self.btn_browse.clicked.connect(self.pick_directory)
+
+def pick_directory(self):
+    from PyQt6.QtWidgets import QFileDialog
+    directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+    if directory:
+        self.dir_edit.setText(directory)
+```
+
+**Key Points:**
+- Use `QHBoxLayout` for horizontal arrangement
+- Add text field first (it will expand), then browse button (fixed width)
+- Browse button text should be "Browse" (standardized)
+- Always use `QFileDialog.getExistingDirectory()` for directory selection
+
+### 2. Scrolling Frame for List Items (MANDATORY)
+
+**Rule:** All list items MUST be placed in a `QScrollArea` with a container widget.
+
+**Template:**
+```python
+from PyQt6.QtWidgets import QScrollArea, QWidget, QVBoxLayout
+
+# Create scroll area
+self.scroll = QScrollArea()
+self.scroll.setWidgetResizable(True)  # Allow content to resize scroll area
+
+# Create container widget for list items
+self.list_widget = QWidget()
+self.list_widget.setLayout(QVBoxLayout())
+self.list_widget.layout().setContentsMargins(0, 0, 0, 0)
+self.list_widget.layout().setSpacing(0)  # No spacing between items
+
+# Set container as scroll area's widget
+self.scroll.setWidget(self.list_widget)
+
+# Add scroll area to main layout
+self.layout().addWidget(self.scroll)
+
+# Add list items to container
+for item in items:
+    item_widget = YourListItemWidget(item)
+    self.list_widget.layout().addWidget(item_widget)
+
+# Add stretch at end to push items to top
+self.list_widget.layout().addStretch()
+```
+
+**Key Points:**
+- Always use `QScrollArea` with `setWidgetResizable(True)`
+- Create a container `QWidget` with `QVBoxLayout` for items
+- Set margins and spacing to 0 for consistent appearance
+- Add stretch at end to align items to top
+
+### 3. Separate Setup Window (MANDATORY)
+
+**Rule:** Application setup/configuration MUST be in a separate modal dialog window.
+
+**Template:**
+```python
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+
+class SetupWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Setup")
+        self.setModal(True)  # Modal dialog - blocks parent window
+        self.setMinimumSize(400, 300)
+        self.resize(400, 450)  # Initial size
+        
+        # Main layout
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Title
+        title_label = QLabel("Setup Configuration")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 10px;")
+        layout.addWidget(title_label)
+        
+        # Add setup content here (scroll area with list items, etc.)
+        # ... (use scrolling frame pattern from section 2)
+        
+        # Close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button)
+
+# In main window, open setup window:
+def open_setup_window(self):
+    setup_window = SetupWindow(self)
+    setup_window.exec()  # Modal execution
+```
+
+**Key Points:**
+- Inherit from `QDialog`, not `QWidget`
+- Set `setModal(True)` to block parent window
+- Use `exec()` to show dialog (not `show()`)
+- Window title should be "Setup" or "Configuration"
+
+### 4. Log Button and Panel (MANDATORY)
+
+**Rule:** Applications MUST include a log toggle checkbox and collapsible log panel.
+
+**Template:**
+```python
+from PyQt6.QtWidgets import QCheckBox, QPlainTextEdit, QWidget, QVBoxLayout
+
+# In main window __init__:
+# Add log checkbox to settings
+self.chk_show_log = QCheckBox("Show log")
+self.chk_show_log.setChecked(False)
+settings_layout.addWidget(self.chk_show_log)
+
+# Create log panel (initially hidden)
+self.log_panel = LogPanel()
+self.log_panel.setVisible(False)
+self.layout().addWidget(self.log_panel)
+
+# Connect checkbox to toggle visibility
+self.chk_show_log.toggled.connect(self.toggle_log_panel)
+
+def toggle_log_panel(self, checked: bool):
+    self.log_panel.setVisible(bool(checked))
+
+def append_log(self, line: str):
+    """Append log message to panel"""
+    self.log_panel.append(line)
+
+# LogPanel class (in separate file or same file)
+class LogPanel(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setLayout(QVBoxLayout())
+        self.text = QPlainTextEdit(self)
+        self.text.setReadOnly(True)
+        self.text.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.layout().addWidget(self.text)
+
+    def append(self, line: str):
+        self.text.appendPlainText(line)
+        # Auto-scroll to bottom
+        self.text.verticalScrollBar().setValue(self.text.verticalScrollBar().maximum())
+```
+
+**Key Points:**
+- Use `QCheckBox("Show log")` for toggle
+- Log panel should be `QPlainTextEdit` with `setReadOnly(True)`
+- Auto-scroll to bottom when appending
+- Panel should be hidden by default
+
+### 5. Dark Mode Enforcement (MANDATORY)
+
+**Rule:** ALL applications MUST use dark mode styling. No light mode support.
+
+**Template - Application-Wide Dark Mode:**
+```python
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QPalette, QColor
+
+def apply_dark_mode(app: QApplication):
+    """Apply dark mode palette to entire application"""
+    palette = QPalette()
+    
+    # Window colors
+    palette.setColor(QPalette.ColorRole.Window, QColor(43, 43, 43))  # #2b2b2b
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(204, 204, 204))  # #cccccc
+    
+    # Base colors (for input fields, etc.)
+    palette.setColor(QPalette.ColorRole.Base, QColor(26, 26, 26))  # #1a1a1a
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(43, 43, 43))  # #2b2b2b
+    
+    # Text colors
+    palette.setColor(QPalette.ColorRole.Text, QColor(204, 204, 204))  # #cccccc
+    palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
+    
+    # Button colors
+    palette.setColor(QPalette.ColorRole.Button, QColor(43, 43, 43))  # #2b2b2b
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(204, 204, 204))  # #cccccc
+    
+    # Highlight colors
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(76, 175, 80))  # #4CAF50 (green)
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+    
+    # Tooltip colors
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(43, 43, 43))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(204, 204, 204))
+    
+    app.setPalette(palette)
+
+# In main():
+app = QApplication(sys.argv)
+apply_dark_mode(app)  # Apply before creating windows
+```
+
+**Template - Component-Specific Dark Mode Stylesheets:**
+```python
+# Standard dark mode colors (use consistently):
+DARK_BG = "#2b2b2b"      # Main background
+DARK_BG_DARKER = "#1a1a1a"  # Input fields, darker areas
+DARK_BORDER = "#404040"     # Borders
+DARK_TEXT = "#cccccc"       # Primary text
+DARK_TEXT_DIM = "#888888"   # Secondary/dimmed text
+DARK_ACCENT = "#4CAF50"      # Accent color (green)
+
+# Example: Button styling
+button.setStyleSheet(f"""
+    QPushButton {{
+        background-color: {DARK_BG};
+        color: {DARK_TEXT};
+        border: 1px solid {DARK_BORDER};
+        border-radius: 8px;
+        padding: 5px 15px;
+        font-size: 11px;
+    }}
+    QPushButton:hover {{
+        background-color: #3a3a3a;
+    }}
+    QPushButton:pressed {{
+        background-color: #1a1a1a;
+    }}
+    QPushButton:disabled {{
+        background-color: {DARK_BG};
+        color: {DARK_TEXT_DIM};
+        border: 1px solid {DARK_BORDER};
+    }}
+""")
+
+# Example: Input field styling
+line_edit.setStyleSheet(f"""
+    QLineEdit {{
+        background-color: {DARK_BG_DARKER};
+        color: {DARK_TEXT};
+        border: 1px solid {DARK_BORDER};
+        border-radius: 4px;
+        padding: 5px;
+        font-size: 11px;
+    }}
+    QLineEdit:focus {{
+        border: 2px solid {DARK_ACCENT};
+    }}
+""")
+
+# Example: Scroll area styling
+scroll_area.setStyleSheet(f"""
+    QScrollArea {{
+        background-color: {DARK_BG};
+        border: 1px solid {DARK_BORDER};
+        border-radius: 4px;
+    }}
+    QScrollBar:vertical {{
+        background-color: {DARK_BG_DARKER};
+        width: 12px;
+        border: none;
+    }}
+    QScrollBar::handle:vertical {{
+        background-color: {DARK_BORDER};
+        border-radius: 6px;
+        min-height: 20px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background-color: #555555;
+    }}
+""")
+```
+
+**Key Points:**
+- Apply dark mode palette in `main()` before creating any windows
+- Use consistent color constants throughout application
+- All widgets should have dark mode stylesheets
+- Standard colors: `#2b2b2b` (bg), `#1a1a1a` (darker), `#cccccc` (text), `#4CAF50` (accent)
+
+## Important Considerations
+
+- **Windows only** - This command is designed for Windows-only applications
+- **PyQt6 required** - Uses PyQt6 framework exclusively
+- **Dark mode mandatory** - All applications must use dark mode styling
+- **UI patterns required** - Browse buttons, scrolling lists, setup windows, and log panels must follow templates
+- **Structure compliance** - All generated projects must follow the exact structure specified
+- **UAT tracking** - The uat_task_list.xlsx must be generated and maintained
+- **Thread safety** - GUI must not freeze during long operations (use QThread/QThreadPool)
+
+## Completion Criteria
+
+- All `uat_task_list.xlsx` items marked "Complete".  
+- All code passes linting and runs from `run.bat`.  
+- Folder structure and documentation verified.

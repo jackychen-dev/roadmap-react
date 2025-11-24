@@ -1,0 +1,85 @@
+---
+description: "Interactive interview to capture user's working style preferences and generate working_style.mdc"
+---
+
+# Interview Working Style
+
+This command conducts an interactive interview to capture your working style preferences and generates a `working_style.mdc` file that can be activated in future sessions using `@working_style.mdc`.
+
+## What it does
+
+When this command is invoked, you should:
+
+1. **Run the interview script** to collect user preferences:
+   ```bash
+   python .cursor/context/agent/tools/interview_working_style.py
+   ```
+
+2. **Guide the user through questions** about:
+   - Communication style (direct vs verbose)
+   - Technical focus and depth
+   - Education level and experience
+   - Project vision and goals
+   - Code style preferences
+   - Error handling preferences
+   - Documentation preferences
+   - Testing preferences
+   - And more...
+
+3. **Generate working_style.mdc** in the `.cursor` root folder with all captured preferences
+
+4. **Confirm completion** and explain how to use `@working_style.mdc` in future sessions
+
+## Execution
+
+**Option 1: Use the helper script (recommended):**
+```bash
+python .cursor/context/agent/tools/interview_working_style.py
+```
+
+The script will:
+- Ask a series of questions interactively
+- Collect all responses
+- Generate `working_style.mdc` in `.cursor/` directory
+- Confirm the file was created
+
+**Option 2: Manual interview:**
+If the script isn't available, conduct the interview directly in chat:
+1. Ask each question from the script
+2. Collect user responses
+3. Generate the `working_style.mdc` file manually based on responses
+
+## Questions Covered
+
+The interview covers:
+- **Communication Style**: Direct vs verbose, explanation depth
+- **Technical Background**: Education, experience level, expertise areas
+- **Project Vision**: Goals, priorities, constraints
+- **Code Preferences**: Style, patterns, conventions
+- **Error Handling**: Verbosity, recovery strategies
+- **Documentation**: Level of detail, format preferences
+- **Testing**: Approach, coverage expectations
+- **Performance**: Optimization focus, trade-offs
+- **Learning**: Preferred explanation style, examples needed
+
+## Output
+
+The generated `working_style.mdc` file will:
+- Be saved at `.cursor/working_style.mdc`
+- Contain all captured preferences in structured format
+- Be ready to activate with `@working_style.mdc` in future sessions
+- Instruct agents to keep these preferences in context for the entire session
+
+## Usage
+
+After running the interview:
+- Use `@working_style.mdc` at the start of any new agent session
+- The agent will read and apply your preferences throughout the session
+- Update preferences anytime by running the interview again
+
+## Important Notes
+
+- **Be honest**: Accurate preferences lead to better assistance
+- **Be specific**: Detailed answers help the agent understand your needs
+- **Update regularly**: Preferences may change as you grow or projects evolve
+- **Keep it current**: Re-run the interview when your needs change
