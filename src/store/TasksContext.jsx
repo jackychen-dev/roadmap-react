@@ -710,9 +710,9 @@ export function TasksProvider({ children }) {
     });
     
     // Build roadmap rows in Title 1/2/3 format
-    // Format: ID, Work Item Type, Title 1 (Epic), Title 2 (Feature), Title 3 (User Story), Start Date, Deliverable, Story Points
+    // Format: ID, Work Item Type, Title 1 (Epic), Title 2 (Feature), Title 3 (User Story), Start Date, Deliverable, Story Points, Demo
     // Each unique value should only appear once in its column
-    const roadmapHeaders = ['ID', 'Work Item Type', 'Title 1', 'Title 2', 'Title 3', 'Start Date', 'Deliverable', 'Story Points'];
+    const roadmapHeaders = ['ID', 'Work Item Type', 'Title 1', 'Title 2', 'Title 3', 'Start Date', 'Deliverable', 'Story Points', 'Demo'];
     const roadmapRows = [];
     
     // Track which values have already appeared in each column
@@ -756,6 +756,7 @@ export function TasksProvider({ children }) {
         formatDate(startDate),
         formatDate(finishDate),
         epic.storyPoints || 0,
+        epic.demo || '',
       ]);
       
       // Add features under this epic
@@ -780,6 +781,7 @@ export function TasksProvider({ children }) {
           formatDate(featureStartDate),
           formatDate(featureFinishDate),
           feature.storyPoints || 0,
+          feature.demo || '',
         ]);
         
         // Add stories under this feature
@@ -804,6 +806,7 @@ export function TasksProvider({ children }) {
             formatDate(storyStartDate),
             formatDate(storyFinishDate),
             story.storyPoints || 0,
+            story.demo || '',
           ]);
         });
       });
@@ -827,6 +830,7 @@ export function TasksProvider({ children }) {
           formatDate(task.start_date || task.startDate || ''),
           formatDate(task.finish_date || task.finishDate || task.deliverableDate || ''),
           task.storyPoints || 0,
+          task.demo || '',
         ]);
       }
     });
