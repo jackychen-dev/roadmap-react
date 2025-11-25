@@ -10,6 +10,7 @@ import {
   writeBatch 
 } from "firebase/firestore";
 import { db } from "../config/firebase";
+import * as XLSX from "xlsx";
 
 function simpleId() {
   return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
@@ -157,38 +158,41 @@ export function TasksProvider({ children }) {
     };
   }, [useFirebase]);
 
-  // Save tasks to Firestore whenever they change
-  useEffect(() => {
-    if (!useFirebase || isLoading) return;
+  // Manual save function - only saves when explicitly called
+  const saveTasks = async () => {
+    if (isLoading) return;
 
-    const tasksRef = doc(db, TASKS_COLLECTION, TASKS_DOC_ID);
-    
-    // Debounce saves to avoid too many writes
-    const timeoutId = setTimeout(() => {
-      setDoc(tasksRef, { tasks }, { merge: true }).catch((error) => {
+    if (useFirebase && db) {
+      const tasksRef = doc(db, TASKS_COLLECTION, TASKS_DOC_ID);
+      try {
+        await setDoc(tasksRef, { tasks }, { merge: true });
+        console.log("✅ Tasks saved to Firestore");
+        // Also save to localStorage as backup
+        try {
+          localStorage.setItem("roadmap-tasks:v1", JSON.stringify(tasks));
+        } catch (e) {
+          console.error("LocalStorage backup error:", e);
+        }
+      } catch (error) {
         console.error("Error saving to Firestore:", error);
         // Fallback to localStorage
         try {
           localStorage.setItem("roadmap-tasks:v1", JSON.stringify(tasks));
+          console.log("✅ Tasks saved to localStorage (Firestore unavailable)");
         } catch (e) {
           console.error("LocalStorage save error:", e);
         }
-      });
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [tasks, useFirebase, isLoading]);
-
-  // Fallback: Save to localStorage if Firebase is not configured
-  useEffect(() => {
-    if (useFirebase) return;
-    
-    try {
-      localStorage.setItem("roadmap-tasks:v1", JSON.stringify(tasks));
-    } catch (e) {
-      console.error("LocalStorage save error:", e);
+      }
+    } else {
+      // Save to localStorage if Firebase is not configured
+      try {
+        localStorage.setItem("roadmap-tasks:v1", JSON.stringify(tasks));
+        console.log("✅ Tasks saved to localStorage");
+      } catch (e) {
+        console.error("LocalStorage save error:", e);
+      }
     }
-  }, [tasks, useFirebase]);
+  };
 
   // Listen for storage events to sync across tabs/components (localStorage fallback)
   useEffect(() => {
@@ -287,10 +291,34 @@ export function TasksProvider({ children }) {
       let title = '';
       
       if (title1Idx >= 0 || title2Idx >= 0 || title3Idx >= 0) {
-        // Format with separate title columns
-        epicName = title1Idx >= 0 ? values[title1Idx] : '';
-        featureName = title2Idx >= 0 ? values[title2Idx] : '';
-        storyName = title3Idx >= 0 ? values[title3Idx] : '';
+        // Format with separate title columns - carry forward empty values
+        const title1Value = title1Idx >= 0 ? values[title1Idx].trim() : '';
+        const title2Value = title2Idx >= 0 ? values[title2Idx].trim() : '';
+        const title3Value = title3Idx >= 0 ? values[title3Idx].trim() : '';
+        
+        // If Title 1 has a value, use it and update currentEpic
+        if (title1Value) {
+          epicName = title1Value;
+          currentEpic = epicName;
+          currentFeature = ''; // Reset feature when epic changes
+        } else if (currentEpic) {
+          // Carry forward last seen epic
+          epicName = currentEpic;
+        }
+        
+        // If Title 2 has a value, use it and update currentFeature
+        if (title2Value) {
+          featureName = title2Value;
+          currentFeature = featureName;
+        } else if (currentFeature) {
+          // Carry forward last seen feature
+          featureName = currentFeature;
+        }
+        
+        // If Title 3 has a value, use it
+        if (title3Value) {
+          storyName = title3Value;
+        }
       } else if (titleIdx >= 0) {
         // Single title column format
         title = values[titleIdx];
@@ -322,28 +350,37 @@ export function TasksProvider({ children }) {
       if (isHierarchyFormat) {
         // Hierarchy format: use title and track epic/feature from context
         itemName = title;
-      } else {
-        // Multi-column format: use epic/feature/story names
+      } else if (title1Idx >= 0 || title2Idx >= 0 || title3Idx >= 0) {
+        // Title 1/2/3 format: use the appropriate column based on work item type
         if (typeLower === 'epic') {
-          itemName = epicName || title;
-          currentEpic = itemName;
-          currentFeature = ''; // Reset feature when new epic
+          itemName = epicName || '';
+          if (epicName) {
+            currentEpic = epicName;
+            currentFeature = ''; // Reset feature when new epic
+          }
         } else if (typeLower === 'feature') {
-          itemName = featureName || title;
-          // Use Title 1 (epic) if available, otherwise keep current epic
-          if (epicName) {
-            currentEpic = epicName;
-          }
-          currentFeature = itemName;
-        } else if (typeLower === 'user story' || typeLower === 'story') {
-          itemName = storyName || title;
-          // Use Title 1 (epic) and Title 2 (feature) if available
-          if (epicName) {
-            currentEpic = epicName;
-          }
+          itemName = featureName || '';
           if (featureName) {
             currentFeature = featureName;
           }
+          // epicName is already set from carry-forward logic above
+        } else if (typeLower === 'user story' || typeLower === 'story') {
+          itemName = storyName || '';
+          // epicName and featureName are already set from carry-forward logic above
+        }
+      } else {
+        // Old format: single title column
+        if (typeLower === 'epic') {
+          itemName = title;
+          currentEpic = itemName;
+          currentFeature = ''; // Reset feature when new epic
+        } else if (typeLower === 'feature') {
+          itemName = title;
+          currentFeature = itemName;
+          // Keep current epic
+        } else if (typeLower === 'user story' || typeLower === 'story') {
+          itemName = title;
+          // Use current epic and feature
         }
       }
       
@@ -410,19 +447,25 @@ export function TasksProvider({ children }) {
           }
         }
         
-        // Handle "26-Nov" format (day-month, assume current year or next year if month has passed)
-        const dayMonthMatch = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})$/i);
+        // Handle "26-Nov" or "26-Nov-2026" format (day-month-year or day-month)
+        const dayMonthMatch = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})(?:-(\d{4}))?$/i);
         if (dayMonthMatch) {
           const day = parseInt(dayMonthMatch[1]);
           const monthStr = dayMonthMatch[2];
+          const yearStr = dayMonthMatch[3];
           const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
           const month = monthNames.findIndex(m => m === monthStr.toLowerCase());
           if (month >= 0) {
-            const now = new Date();
-            let year = now.getFullYear();
-            // If the month has passed this year, use next year
-            if (month < now.getMonth() || (month === now.getMonth() && day < now.getDate())) {
-              year = year + 1;
+            let year;
+            if (yearStr) {
+              year = parseInt(yearStr);
+            } else {
+              const now = new Date();
+              year = now.getFullYear();
+              // If the month has passed this year, use next year
+              if (month < now.getMonth() || (month === now.getMonth() && day < now.getDate())) {
+                year = year + 1;
+              }
             }
             date = new Date(year, month, day);
             if (!isNaN(date.getTime())) return date;
@@ -591,11 +634,10 @@ export function TasksProvider({ children }) {
     return result;
   };
 
-  // Export tasks to CSV
-  const exportCSV = () => {
+  // Helper function to build roadmap data
+  const buildRoadmapData = () => {
     // First, organize tasks hierarchically
     const epicMap = {};
-    const featureMap = {};
     
     // Organize tasks into epics -> features -> stories structure
     tasks.forEach(task => {
@@ -667,86 +709,101 @@ export function TasksProvider({ children }) {
       epicMap[epicName] = calculateEpicAggregates(epicMap[epicName]);
     });
     
-    // Build CSV rows with aggregated data
-    const headers = ['ID', 'Work Item Type', 'Title', 'Assigned To', 'State', 'Story Points', 'Start Date', 'Finish Date', 'Duration (Days)', 'Demo'];
-    const rows = [];
+    // Build roadmap rows in Title 1/2/3 format
+    // Format: ID, Work Item Type, Title 1 (Epic), Title 2 (Feature), Title 3 (User Story), Start Date, Deliverable, Story Points
+    // Each unique value should only appear once in its column
+    const roadmapHeaders = ['ID', 'Work Item Type', 'Title 1', 'Title 2', 'Title 3', 'Start Date', 'Deliverable', 'Story Points'];
+    const roadmapRows = [];
+    
+    // Track which values have already appeared in each column
+    const seenTitle1 = new Set();
+    const seenTitle2 = new Set();
+    const seenTitle3 = new Set();
+    
+    // Helper to format date as DD-Mon
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        const day = date.getDate();
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${day}-${monthNames[date.getMonth()]}`;
+      } catch (e) {
+        return dateStr;
+      }
+    };
     
     // Add epics
     Object.values(epicMap).forEach(epic => {
       const type = 'Epic';
-      const title = epic.epic || epic.title || '';
+      const epicName = epic.epic || epic.title || '';
       const startDate = epic.start_date || epic.startDate || '';
       const finishDate = epic.finish_date || epic.finishDate || epic.deliverableDate || '';
-      let duration = 0;
-      if (startDate && finishDate) {
-        const start = new Date(startDate);
-        const finish = new Date(finishDate);
-        duration = Math.ceil((finish - start) / (1000 * 60 * 60 * 24)) + 1;
+      
+      // Epic name appears in Title 1 only once
+      const title1 = seenTitle1.has(epicName) ? '' : epicName;
+      if (epicName && !seenTitle1.has(epicName)) {
+        seenTitle1.add(epicName);
       }
       
-      rows.push([
-        epic.id || `epic-${title}`,
+      roadmapRows.push([
+        epic.id || `epic-${epicName}`,
         type,
-        title,
-        epic.assignedTo || '',
-        epic.state || 'New',
+        title1, // Title 1 (only appears once)
+        '', // Title 2 (empty for epics)
+        '', // Title 3 (empty for epics)
+        formatDate(startDate),
+        formatDate(finishDate),
         epic.storyPoints || 0,
-        startDate,
-        finishDate,
-        duration,
-        epic.demo || '',
       ]);
       
       // Add features under this epic
       Object.values(epic.features || {}).forEach(feature => {
         const featureType = 'Feature';
-        const featureTitle = feature.feature || feature.title || '';
+        const featureName = feature.feature || feature.title || '';
         const featureStartDate = feature.start_date || feature.startDate || '';
         const featureFinishDate = feature.finish_date || feature.finishDate || feature.deliverableDate || '';
-        let featureDuration = 0;
-        if (featureStartDate && featureFinishDate) {
-          const start = new Date(featureStartDate);
-          const finish = new Date(featureFinishDate);
-          featureDuration = Math.ceil((finish - start) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // Feature name appears in Title 2 only once
+        const title2 = seenTitle2.has(featureName) ? '' : featureName;
+        if (featureName && !seenTitle2.has(featureName)) {
+          seenTitle2.add(featureName);
         }
         
-        rows.push([
-          feature.id || `feature-${featureTitle}`,
+        roadmapRows.push([
+          feature.id || `feature-${featureName}`,
           featureType,
-          featureTitle,
-          feature.assignedTo || '',
-          feature.state || 'New',
+          '', // Title 1 (empty - epic already appeared)
+          title2, // Title 2 (only appears once)
+          '', // Title 3 (empty for features)
+          formatDate(featureStartDate),
+          formatDate(featureFinishDate),
           feature.storyPoints || 0,
-          featureStartDate,
-          featureFinishDate,
-          featureDuration,
-          feature.demo || '',
         ]);
         
         // Add stories under this feature
         (feature.stories || []).forEach(story => {
           const storyType = 'User Story';
-          const storyTitle = story.story || story.title || '';
+          const storyName = story.story || story.title || '';
           const storyStartDate = story.start_date || story.startDate || '';
           const storyFinishDate = story.finish_date || story.finishDate || story.deliverableDate || '';
-          let storyDuration = story.duration_days || 0;
-          if (!storyDuration && storyStartDate && storyFinishDate) {
-            const start = new Date(storyStartDate);
-            const finish = new Date(storyFinishDate);
-            storyDuration = Math.ceil((finish - start) / (1000 * 60 * 60 * 24)) + 1;
+          
+          // Story name appears in Title 3 only once
+          const title3 = seenTitle3.has(storyName) ? '' : storyName;
+          if (storyName && !seenTitle3.has(storyName)) {
+            seenTitle3.add(storyName);
           }
           
-          rows.push([
+          roadmapRows.push([
             story.id,
             storyType,
-            storyTitle,
-            story.assignedTo || '',
-            story.state || 'New',
+            '', // Title 1 (empty - epic already appeared)
+            '', // Title 2 (empty - feature already appeared)
+            title3, // Title 3 (only appears once)
+            formatDate(storyStartDate),
+            formatDate(storyFinishDate),
             story.storyPoints || 0,
-            storyStartDate,
-            storyFinishDate,
-            storyDuration,
-            story.demo || '',
           ]);
         });
       });
@@ -757,23 +814,210 @@ export function TasksProvider({ children }) {
       if (task.type !== 'epic' && task.type !== 'feature' && task.type !== 'user story' && task.type !== 'story') {
         const type = 'Task';
         const title = task.title || '';
-        rows.push([
+        const title3 = seenTitle3.has(title) ? '' : title;
+        if (title && !seenTitle3.has(title)) {
+          seenTitle3.add(title);
+        }
+        roadmapRows.push([
           task.id,
           type,
-          title,
-          task.assignedTo || '',
-          task.state || 'New',
+          '', // Title 1
+          '', // Title 2
+          title3, // Title 3
+          formatDate(task.start_date || task.startDate || ''),
+          formatDate(task.finish_date || task.finishDate || task.deliverableDate || ''),
           task.storyPoints || 0,
-          task.start_date || task.startDate || '',
-          task.finish_date || task.finishDate || task.deliverableDate || '',
-          task.duration_days || 0,
-          task.demo || '',
         ]);
       }
     });
     
+    return { headers: roadmapHeaders, rows: roadmapRows };
+  };
+
+  // Import Excel file with 3 tabs
+  const importExcel = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          // Import Roadmap sheet
+          const roadmapSheet = workbook.Sheets[workbook.SheetNames.find(name => 
+            name.toLowerCase().includes('roadmap')
+          )];
+          
+          if (roadmapSheet) {
+            // Convert sheet to JSON array
+            const roadmapData = XLSX.utils.sheet_to_json(roadmapSheet, { header: 1, defval: '' });
+            
+            if (roadmapData.length > 1) {
+              // Convert to CSV-like format and import
+              const headers = roadmapData[0].map(h => String(h || '').trim());
+              const csvLines = [
+                headers.join(','),
+                ...roadmapData.slice(1).map(row => 
+                  row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
+                )
+              ];
+              const csvText = csvLines.join('\n');
+              importCSV(csvText);
+            }
+          }
+          
+          // Import Personnel Resourcing sheet (with year headers: FY2026, FY2027, etc.)
+          const personnelSheet = workbook.Sheets[workbook.SheetNames.find(name => 
+            name.toLowerCase().includes('personnel')
+          )];
+          
+          if (personnelSheet) {
+            try {
+              const personnelData = XLSX.utils.sheet_to_json(personnelSheet, { header: 1, defval: '' });
+              const positionsByYear = {};
+              const years = [2026, 2027, 2028];
+              let currentYear = null;
+              let headers = null;
+              
+              personnelData.forEach((row, index) => {
+                const firstCell = String(row[0] || '').trim();
+                
+                // Check if this is a year header (FY2026, FY2027, etc.)
+                const yearMatch = firstCell.match(/FY(\d{4})/i);
+                if (yearMatch) {
+                  currentYear = parseInt(yearMatch[1]);
+                  if (years.includes(currentYear)) {
+                    positionsByYear[currentYear] = [];
+                    headers = null; // Reset headers for next section
+                  }
+                } else if (currentYear && years.includes(currentYear)) {
+                  // Check if this is a header row
+                  if (firstCell.toLowerCase().includes('position') || 
+                      firstCell.toLowerCase().includes('source') ||
+                      firstCell.toLowerCase().includes('cost')) {
+                    headers = row.map(h => String(h || '').trim());
+                  } else if (headers && firstCell) {
+                    // This is a data row
+                    const position = String(row[headers.findIndex(h => h.toLowerCase().includes('position'))] || '').trim();
+                    const source = String(row[headers.findIndex(h => h.toLowerCase().includes('source'))] || '').trim();
+                    const cost = parseFloat(row[headers.findIndex(h => h.toLowerCase().includes('cost'))] || 0);
+                    const qty = parseFloat(row[headers.findIndex(h => h.toLowerCase().includes('qty'))] || 0);
+                    const storyPointsPerMonth = parseFloat(row[headers.findIndex(h => h.toLowerCase().includes('story points'))] || 0);
+                    
+                    if (position) {
+                      positionsByYear[currentYear].push({
+                        position,
+                        source: source || 'Eclipse',
+                        cost: cost || 0,
+                        qty: qty || 0,
+                        storyPointsPerMonth: storyPointsPerMonth || 0
+                      });
+                    }
+                  }
+                }
+              });
+              
+              // Save personnel resourcing data
+              if (Object.keys(positionsByYear).length > 0) {
+                try {
+                  const existing = localStorage.getItem('resourcing-data');
+                  const existingData = existing ? JSON.parse(existing) : {};
+                  Object.keys(positionsByYear).forEach(year => {
+                    existingData[year] = positionsByYear[year];
+                  });
+                  localStorage.setItem('resourcing-data', JSON.stringify(existingData));
+                } catch (e) {
+                  console.error('Error saving personnel resourcing data:', e);
+                }
+              }
+            } catch (e) {
+              console.error('Error importing personnel resourcing:', e);
+            }
+          }
+          
+          // Import Hardware Resourcing sheet (with fiscal year headers: FY26, FY27, etc.)
+          const hardwareSheet = workbook.Sheets[workbook.SheetNames.find(name => 
+            name.toLowerCase().includes('hardware')
+          )];
+          
+          if (hardwareSheet) {
+            try {
+              const hardwareData = XLSX.utils.sheet_to_json(hardwareSheet, { header: 1, defval: '' });
+              const hardwareByYear = {};
+              const fiscalYears = ['FY26', 'FY27', 'FY28'];
+              let currentYear = null;
+              let headers = null;
+              
+              hardwareData.forEach((row, index) => {
+                const firstCell = String(row[0] || '').trim();
+                
+                // Check if this is a fiscal year header (FY26, FY27, etc.)
+                if (fiscalYears.includes(firstCell)) {
+                  currentYear = firstCell;
+                  hardwareByYear[currentYear] = [];
+                  headers = null; // Reset headers for next section
+                } else if (currentYear && fiscalYears.includes(currentYear)) {
+                  // Check if this is a header row
+                  if (firstCell.toLowerCase().includes('category') || 
+                      firstCell.toLowerCase().includes('item') ||
+                      firstCell.toLowerCase().includes('cost')) {
+                    headers = row.map(h => String(h || '').trim());
+                  } else if (headers && (firstCell || String(row[1] || '').trim())) {
+                    // This is a data row
+                    const category = String(row[headers.findIndex(h => h.toLowerCase().includes('category'))] || '').trim();
+                    const item = String(row[headers.findIndex(h => h.toLowerCase().includes('item'))] || '').trim();
+                    const description = String(row[headers.findIndex(h => h.toLowerCase().includes('description'))] || '').trim();
+                    const cost = parseFloat(row[headers.findIndex(h => h.toLowerCase().includes('cost'))] || 0);
+                    const qty = parseFloat(row[headers.findIndex(h => h.toLowerCase().includes('qty'))] || 0);
+                    
+                    if (item || category) {
+                      hardwareByYear[currentYear].push({
+                        category: category || '',
+                        item: item || '',
+                        description: description || '',
+                        cost: cost || 0,
+                        qty: qty || 0
+                      });
+                    }
+                  }
+                }
+              });
+              
+              // Save hardware resourcing data
+              if (Object.keys(hardwareByYear).length > 0) {
+                try {
+                  const existing = localStorage.getItem('hardware-resourcing-data');
+                  const existingData = existing ? JSON.parse(existing) : {};
+                  Object.keys(hardwareByYear).forEach(year => {
+                    existingData[year] = hardwareByYear[year];
+                  });
+                  localStorage.setItem('hardware-resourcing-data', JSON.stringify(existingData));
+                } catch (e) {
+                  console.error('Error saving hardware resourcing data:', e);
+                }
+              }
+            } catch (e) {
+              console.error('Error importing hardware resourcing:', e);
+            }
+          }
+          
+          resolve();
+        } catch (error) {
+          console.error('Error importing Excel file:', error);
+          reject(error);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Export tasks to CSV (roadmap only)
+  const exportCSV = () => {
+    const { headers, rows } = buildRoadmapData();
+    
     const csvContent = [
-      headers.join(','),
+      headers.map(h => `"${h}"`).join(','),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
     ].join('\n');
     
@@ -784,6 +1028,108 @@ export function TasksProvider({ children }) {
     a.download = 'roadmap-export.csv';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Export all fields to Excel with 3 tabs
+  const exportExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    
+    // ===== SHEET 1: ROADMAP =====
+    const { headers: roadmapHeaders, rows: roadmapRows } = buildRoadmapData();
+    const roadmapData = [roadmapHeaders, ...roadmapRows];
+    const roadmapSheet = XLSX.utils.aoa_to_sheet(roadmapData);
+    XLSX.utils.book_append_sheet(workbook, roadmapSheet, 'Roadmap');
+    
+    // ===== SHEET 2: PERSONNEL RESOURCING (with year headers) =====
+    try {
+      const resourcingDataRaw = localStorage.getItem('resourcing-data');
+      if (resourcingDataRaw) {
+        const resourcingData = JSON.parse(resourcingDataRaw);
+        const personnelHeaders = ['Position', 'Source', 'Cost', 'QTY', 'Total (Per Year)', 'Overall', 'Story Points Per Month'];
+        const years = [2026, 2027, 2028];
+        const personnelRows = [];
+        
+        years.forEach(year => {
+          const positions = resourcingData[year] || [];
+          if (positions.length > 0) {
+            // Add year header row
+            personnelRows.push([`FY${year}`, '', '', '', '', '', '']);
+            // Add column headers
+            personnelRows.push(personnelHeaders);
+            // Add data rows
+            positions.forEach(pos => {
+              const totalPerYear = pos.cost * pos.qty;
+              const overall = pos.source === 'Eclipse' ? pos.qty : 0;
+              personnelRows.push([
+                pos.position || '',
+                pos.source || '',
+                pos.cost || 0,
+                pos.qty || 0,
+                totalPerYear,
+                overall,
+                pos.storyPointsPerMonth || 0,
+              ]);
+            });
+            // Add empty row between years
+            personnelRows.push(['', '', '', '', '', '', '']);
+          }
+        });
+        
+        if (personnelRows.length > 0) {
+          const personnelData = personnelRows;
+          const personnelSheet = XLSX.utils.aoa_to_sheet(personnelData);
+          XLSX.utils.book_append_sheet(workbook, personnelSheet, 'Personnel Resourcing');
+        }
+      }
+    } catch (e) {
+      console.error('Error exporting personnel resourcing data:', e);
+    }
+    
+    // ===== SHEET 3: HARDWARE RESOURCING (with fiscal year headers) =====
+    try {
+      const hardwareDataRaw = localStorage.getItem('hardware-resourcing-data');
+      if (hardwareDataRaw) {
+        const hardwareData = JSON.parse(hardwareDataRaw);
+        const hardwareHeaders = ['Category', 'Item', 'Description', 'Cost', 'QTY', 'Total'];
+        const fiscalYears = ['FY26', 'FY27', 'FY28'];
+        const hardwareRows = [];
+        
+        fiscalYears.forEach(year => {
+          const items = hardwareData[year] || [];
+          if (items.length > 0) {
+            // Add fiscal year header row
+            hardwareRows.push([year, '', '', '', '', '']);
+            // Add column headers
+            hardwareRows.push(hardwareHeaders);
+            // Add data rows
+            items.forEach(item => {
+              const total = item.cost * item.qty;
+              hardwareRows.push([
+                item.category || '',
+                item.item || '',
+                item.description || '',
+                item.cost || 0,
+                item.qty || 0,
+                total,
+              ]);
+            });
+            // Add empty row between years
+            hardwareRows.push(['', '', '', '', '', '']);
+          }
+        });
+        
+        if (hardwareRows.length > 0) {
+          const hardwareSheetData = hardwareRows;
+          const hardwareSheet = XLSX.utils.aoa_to_sheet(hardwareSheetData);
+          XLSX.utils.book_append_sheet(workbook, hardwareSheet, 'Hardware Resourcing');
+        }
+      }
+    } catch (e) {
+      console.error('Error exporting hardware resourcing data:', e);
+    }
+    
+    // Export the workbook as Excel file
+    XLSX.writeFile(workbook, 'roadmap-export.xlsx');
   };
 
   const addTask = (task) => {
@@ -904,8 +1250,11 @@ export function TasksProvider({ children }) {
       addTask, 
       updateTask, 
       deleteTask, 
-      importCSV, 
-      exportCSV, 
+      importCSV,
+      importExcel,
+      exportCSV,
+      exportExcel,
+      saveTasks,
       removeDuplicates,
       isLoading,
       useFirebase 
